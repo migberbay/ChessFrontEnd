@@ -6,7 +6,8 @@ public class Piece : MonoBehaviour
 {
     public bool ownedByPlayer;
     
-    public void MoveToPosition(Vector3 destination){
-        transform.position = new Vector3(destination.x, transform.position.y,destination.z);
+    public void MoveToPosition(Vector2 destination){
+        Debug.Log("piece recieved: " + destination.ToString());
+        transform.position = new Vector3(destination.x, transform.position.y, destination.y);
     }
 }
