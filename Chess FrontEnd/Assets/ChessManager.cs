@@ -6,6 +6,7 @@ using System.Net;
 using Newtonsoft.Json.Linq;
 using System.IO;
 using System.Text;
+using TMPro;
 
 public class ChessManager : MonoBehaviour
 {
@@ -18,11 +19,11 @@ public class ChessManager : MonoBehaviour
 
     public Transform whiteCementery, blackCementery;
 
-    public GameObject MCWhite, MCBlack, highlightSquarePrefab, highlightSquareCont;
+    public GameObject MCWhite, MCBlack, highlightSquarePrefab, highlightSquareCont, CanvasOptionPrefab, ButtonOptionPrefab;
 
 
     int deadPiecesWhite = 0, deadPiecesBlack = 0;
-    bool playingWhite = false, playingBlack = false, playerTurn = false;
+    bool playingWhite = false, playingBlack = false, playerTurn = false, currentTurnCheck = false;
     Transform selectedPiece;
     Transform[,] _board =  new Transform[8,8];
     List<Vector2> validMoves = new List<Vector2>();
@@ -42,9 +43,6 @@ public class ChessManager : MonoBehaviour
 
     #endregion
 
-    // si no tienes movimientos y estas en jaque es jaque mate
-    // si no tienes movimientos y no estas en jaque es tablas
-
     void Start()
     {
         InitializeBoard();
@@ -61,6 +59,13 @@ public class ChessManager : MonoBehaviour
 
     IEnumerator GameLoop(){
         GetTurnInfoFromServer();
+        var gameOver = CheckGameDoneConditions();
+        if(gameOver){
+            yield return null;
+        }
+        
+        Debug.Log("continues loop");
+
         if(playerTurn){
             bool moveSelected = false;
             while(!moveSelected){
@@ -75,6 +80,21 @@ public class ChessManager : MonoBehaviour
 
         StartCoroutine(GameLoop());
     }
+
+    private bool CheckGameDoneConditions(){
+        if(stringmoves.Count == 0){
+            // si no tienes movimientos y estas en jaque es jaque mate
+            // si no tienes movimientos y no estas en jaque es tablas
+            if(currentTurnCheck){
+                Debug.Log("Game Over, CheckMate!");
+            }else{
+                Debug.Log("Game Over, Draw :(");
+            }
+            return true;
+        }
+        return false;
+    }
+
 
     private void DoRandomMove(){
         Vector2 aux = new Vector2();
@@ -127,8 +147,67 @@ public class ChessManager : MonoBehaviour
             cementery = blackCementery;
         }
 
-        piece.transform.position = new Vector3(cementery.position.x + (int)deadPieces/4, piece.transform.position.y, cementery.position.z + deadPieces%4);
-        
+        piece.transform.position = new Vector3(cementery.position.x + (int)deadPieces/5, piece.transform.position.y, cementery.position.z + deadPieces%5);
+        try{
+            piece.gameObject.GetComponent<Piece>().enabled = false;
+            piece.gameObject.GetComponent<Outline>().enabled = false;
+        }catch{}
+
+    }
+
+    private void AddOptionPanelToPiece(List<string> options, Transform piece){
+        var canvasInstance = Instantiate(CanvasOptionPrefab);
+        canvasInstance.transform.position = new Vector3(piece.transform.position.x, 2.5f, piece.transform.position.z);
+        canvasInstance.GetComponent<RectTransform>().sizeDelta = new Vector2(options.Count, 0.75f);
+        var look = canvasInstance.GetComponent<LookAtCamera>();
+        look.cameraToLook = playingWhite ? MCWhite : MCBlack;
+
+        if(playingBlack)
+            look.InitPanel("b");
+
+        if(playingWhite)
+            look.InitPanel("w");
+
+        var layoutParent = canvasInstance.transform.Find("Panel");
+        foreach (var o in options){
+            var buttonInstance = Instantiate(ButtonOptionPrefab, layoutParent);
+            var button_text = buttonInstance.GetComponentInChildren<TMP_Text>();
+            if(o == "O-O-O"){
+                if(piece.GetComponent<Piece>().pieceType == "rook"){
+                    if(playingWhite)
+                        button_text.text = "C->";
+                    if(playingBlack)
+                        button_text.text = "<-C";
+                }else{
+                    if(playingWhite)
+                        button_text.text = "<-C";
+                    if(playingBlack)
+                        button_text.text = "C->";
+                }
+                   
+            }
+            if(o == "O-O"){
+                if(piece.GetComponent<Piece>().pieceType == "rook"){
+                    if(playingWhite)
+                        button_text.text = "<-C";
+                    if(playingBlack)
+                        button_text.text = "C->";
+                }else{
+                    if(playingWhite)
+                        button_text.text = "C->";
+                    if(playingBlack)
+                        button_text.text = "<-C";
+                }
+            }
+        }
+    }
+
+    private void Castle(string castleOptions){
+
+    }
+
+    private void PromotePawn(Transform pawn, string toPromote){
+
     }
 
     private bool PlayerSelectionFrameRules(){
@@ -146,21 +225,60 @@ public class ChessManager : MonoBehaviour
                         var pieceSquare = squareNames[Mathf.RoundToInt(selectedPiece.transform.position.x), Mathf.RoundToInt(selectedPiece.transform.position.z)];
                         List<string> applicable_moves = new List<string>(stringmoves.FindAll(x => x.Substring(0,2) == pieceSquare));
                         
-                        int i = 0, j = 0;
-                        foreach (var a in squareNames){
-                            foreach (var move in applicable_moves){
-                                if(move.Substring(2,2) == a){
-                                    _highlightSquares[i,j].SetActive(true);
-                                    validMoves.Add(new Vector2(i,j));
-                                }
+                        var pieceType = selectedPiece.GetComponent<Piece>().pieceType;
+
+                        // Checking castles
+
+                        var castleMoves = stringmoves.FindAll(x => x.Substring(0,1) == "O");
+
+                        if(castleMoves.Count != 0){
+                            if(pieceType == "rook"){
+                                // RaycastHit[] hits = new RaycastHit[2];
+                                // Physics.Raycast(selectedPiece.transform.position + new Vector3(-0.75f, 0.5f, 0), Vector3.left, out hits[0], 10);
+                                // Physics.Raycast(selectedPiece.transform.position + new Vector3(0.75f, 0.5f, 0), Vector3.right, out hits[1], 10);
+                                
+                                // var aux1 = hits[0].transform.GetComponent<Piece>();
+                                // if(aux1 != null) aux1.pieceType == "king
+
+                                if(selectedPiece.transform.position.x == 0 && castleMoves.Contains("O-O-O")) //A-file rook
+                                    AddOptionPanelToPiece(new List<string>{"O-O-O"}, selectedPiece);
+
+                                if(selectedPiece.transform.position.x == 7 && castleMoves.Contains("O-O")) // H-file rook.
+                                    AddOptionPanelToPiece(new List<string>{"O-O"}, selectedPiece);
+                                
                             }
-                            // by using this kind of double array we need to do this.
-                            j++;
-                            if(j == 8){
-                                i++;
-                                j = 0;
+
+                            if(pieceType == "king"){
+                                AddOptionPanelToPiece(castleMoves, selectedPiece);
                             }
                         }
+
+                        // Checking PawnPromotion
+                        if(pieceType == "pawn"){
+                            var pawnPromotions = applicable_moves.FindAll(x => x.Contains("="));
+                            if(pawnPromotions.Count != 0){
+                                List<string> options = new List<string>();
+                                foreach (var promotion in pawnPromotions){ // There can be up to 12 pawn promotions
+                                    options.Add(promotion);
+                                }
+                                AddOptionPanelToPiece(options, selectedPiece);
+                            }
+                        }
+
+                        
+                        // Highlight squares
+                        for (int i = squareNames.GetLowerBound(0); i <= squareNames.GetUpperBound(0); i++){
+                            for (int j = squareNames.GetLowerBound(1); j <= squareNames.GetUpperBound(1); j++){
+                                foreach (var move in applicable_moves){
+                                    if(move.Substring(2,2) == squareNames[i,j]){
+                                        _highlightSquares[i,j].SetActive(true);
+                                        validMoves.Add(new Vector2(i,j));
+                                    }
+                                }
+                            }
+                        }
+
+
                     }
                 }
             }else{ // Move Piece
@@ -171,6 +289,8 @@ public class ChessManager : MonoBehaviour
                 
                 foreach (var v in validMoves){
                     if(v.Equals(pointHit)){
+                        //TODO: en passant
+
                         //Move is valid, perform it and pass the turn to the next player.
                         //Update board
                         _board[Mathf.RoundToInt(selectedPiece.transform.position.x), Mathf.RoundToInt(selectedPiece.transform.position.z)] = null;
@@ -265,6 +385,7 @@ public class ChessManager : MonoBehaviour
                 outline.OutlineWidth = 7.5f;
                 p.ownedByPlayer = true;
             }
+
             foreach (var piece in GetAllPiecesAsArray("w"))
             {
                 var p = piece.gameObject.AddComponent<Piece>();
@@ -295,7 +416,9 @@ public class ChessManager : MonoBehaviour
         string data = reader.ReadToEnd();
         JObject root = JObject.Parse(data);
         var turn_info = root.SelectToken("turn_info");
+        Debug.Log("turn info: " + turn_info.ToString());
         stringmoves = turn_info.SelectToken("moves").Values<string>().ToList();
+        currentTurnCheck = turn_info.SelectToken("in_check").Value<bool>();
     }
 
     private void SendMoveToServer(Vector2 move_origin, Vector2 move_desination, string moveString, bool usingString){
@@ -310,8 +433,6 @@ public class ChessManager : MonoBehaviour
             post_data = "{\"move\":\""+squareNames[(int)move_origin.x, (int)move_origin.y]
             +""+squareNames[(int)move_desination.x, (int)move_desination.y]+"\"}";
         }
-
-        Debug.Log("sent the following to server: "+ post_data);
 
         var data = Encoding.ASCII.GetBytes(post_data);
 
