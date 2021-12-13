@@ -2,6 +2,7 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
+using UnityEngine.UI;
 using System.Net;
 using Newtonsoft.Json.Linq;
 using System.IO;
@@ -21,11 +22,13 @@ public class ChessManager : MonoBehaviour
 
     public GameObject MCWhite, MCBlack, highlightSquarePrefab, highlightSquareCont, CanvasOptionPrefab, ButtonOptionPrefab;
 
+    public Mesh queenMesh, bishopMesh, knightMesh, rookMesh;
 
-    int deadPiecesWhite = 0, deadPiecesBlack = 0;
-    bool playingWhite = false, playingBlack = false, playerTurn = false, currentTurnCheck = false;
-    Transform selectedPiece;
+
     Transform[,] _board =  new Transform[8,8];
+    int deadPiecesWhite = 0, deadPiecesBlack = 0;
+    bool moveSelected, playingWhite = false, playingBlack = false, playerTurn = false, currentTurnCheck = false;
+    Transform selectedPiece;
     List<Vector2> validMoves = new List<Vector2>();
     string[,] squareNames = new string[8,8]{
     { "a1","a2","a3","a4","a5","a6","a7","a8"},
@@ -40,11 +43,11 @@ public class ChessManager : MonoBehaviour
     Camera active;
     List<string> stringmoves;
     string url = "http://127.0.0.1:8000", gameKey = "";
+    GameObject canvasInstance;
 
     #endregion
 
-    void Start()
-    {
+    void Start(){
         InitializeBoard();
         InitializeSystem();
         UnlayerEnemyPieces();
@@ -61,13 +64,11 @@ public class ChessManager : MonoBehaviour
         GetTurnInfoFromServer();
         var gameOver = CheckGameDoneConditions();
         if(gameOver){
-            yield return null;
+            yield break;
         }
-        
-        Debug.Log("continues loop");
 
         if(playerTurn){
-            bool moveSelected = false;
+            moveSelected = false;
             while(!moveSelected){
                 moveSelected = PlayerSelectionFrameRules();
                 yield return null;
@@ -79,6 +80,12 @@ public class ChessManager : MonoBehaviour
         }
 
         StartCoroutine(GameLoop());
+    }
+
+
+
+    void PresentFinalMenu(){
+
     }
 
     private bool CheckGameDoneConditions(){
@@ -155,10 +162,11 @@ public class ChessManager : MonoBehaviour
 
     }
 
-    private void AddOptionPanelToPiece(List<string> options, Transform piece){
-        var canvasInstance = Instantiate(CanvasOptionPrefab);
-        canvasInstance.transform.position = new Vector3(piece.transform.position.x, 2.5f, piece.transform.position.z);
+    private void AddOptionPanelToSelectedPiece(List<string> options){
+        canvasInstance = Instantiate(CanvasOptionPrefab);
+        canvasInstance.transform.position = new Vector3(selectedPiece.transform.position.x, 2.5f, selectedPiece.transform.position.z);
         canvasInstance.GetComponent<RectTransform>().sizeDelta = new Vector2(options.Count, 0.75f);
+        canvasInstance.GetComponent<BoxCollider>().size = new Vector3(options.Count, 0.75f, 0.1f);
         var look = canvasInstance.GetComponent<LookAtCamera>();
         look.cameraToLook = playingWhite ? MCWhite : MCBlack;
 
@@ -171,43 +179,172 @@ public class ChessManager : MonoBehaviour
         var layoutParent = canvasInstance.transform.Find("Panel");
         foreach (var o in options){
             var buttonInstance = Instantiate(ButtonOptionPrefab, layoutParent);
+            Button b = buttonInstance.GetComponent<Button>();
             var button_text = buttonInstance.GetComponentInChildren<TMP_Text>();
+
+            var pieceType = selectedPiece.GetComponent<Piece>().pieceType;
             if(o == "O-O-O"){
-                if(piece.GetComponent<Piece>().pieceType == "rook"){
-                    if(playingWhite)
+                if(pieceType == "rook"){
+                    if(playingWhite){
                         button_text.text = "C->";
-                    if(playingBlack)
+                        b.onClick.AddListener(delegate{Castle(3,-2, selectedPiece, Kw);});
+                    }
+                    if(playingBlack){
+                        b.onClick.AddListener(delegate{Castle(3,-2, selectedPiece, Kn);});
                         button_text.text = "<-C";
+                    }
                 }else{
-                    if(playingWhite)
+                    if(playingWhite){
                         button_text.text = "<-C";
-                    if(playingBlack)
+                        b.onClick.AddListener(delegate{Castle(3,-2, ta1, selectedPiece);});
+                    }
+                    if(playingBlack){
                         button_text.text = "C->";
-                }
-                   
+                        b.onClick.AddListener(delegate{Castle(3,-2, ta8, selectedPiece);});
+                    }
+                }  
             }
+
             if(o == "O-O"){
-                if(piece.GetComponent<Piece>().pieceType == "rook"){
-                    if(playingWhite)
+                if(pieceType == "rook"){
+                    if(playingWhite){
                         button_text.text = "<-C";
-                    if(playingBlack)
+                        b.onClick.AddListener(delegate{Castle(-2,2, selectedPiece, Kw);});
+                    }
+                    if(playingBlack){
                         button_text.text = "C->";
+                        b.onClick.AddListener(delegate{Castle(-2,2, selectedPiece, Kn);});
+                    }
                 }else{
-                    if(playingWhite)
+                    if(playingWhite){
                         button_text.text = "C->";
-                    if(playingBlack)
+                        b.onClick.AddListener(delegate{Castle(-2,2, th1, selectedPiece);});
+                    }
+                    if(playingBlack){
                         button_text.text = "<-C";
+                        b.onClick.AddListener(delegate{Castle(-2,2, th8, selectedPiece);});
+                    }
+                }
+            }
+
+            if(pieceType == "pawn"){
+                var originFile = o.Substring(0,1);
+                var destinationFile = o.Substring(2,1);
+                var pieceToPromote = o.Substring(5,1); 
+
+                // Convert the string into a byte.
+                byte asciiByteOrigin = Encoding.ASCII.GetBytes(originFile)[0];
+                byte asciiByteDestination = Encoding.ASCII.GetBytes(destinationFile)[0];
+
+                bool lessThanCurrent = asciiByteOrigin < asciiByteDestination;
+                bool greaterThanCurrent = asciiByteOrigin > asciiByteDestination;
+
+                Debug.Log("origin: " + asciiByteOrigin + ", Destination: " + asciiByteDestination);
+
+                // _board = new Transform[8,8]{
+                // { ta1, pa2,null,null,null,null,pa7,ta8},
+                // { cb1, pb2,null,null,null,null,pb7,cb8},
+                // { ac1, pc2,null,null,null,null,pc7,ac8},
+                // { Qw, pd2,null,null,null,null,pd7,Qn},
+                // { Kw, pe2,null,null,null,null,pe7,Kn},
+                // { af1, pf2,null,null,null,null,pf7,af8},
+                // { cg1, pg2,null,null,null,null,pg7,cg8},
+                // { th1, ph2,null,null,null,null,ph7,th8}};
+                
+                if(lessThanCurrent){
+                    if(playingBlack){
+                        button_text.text = "<" + pieceToPromote;
+                        b.onClick.AddListener(delegate{PromotePawn(pieceToPromote, o, new Vector2(1,-1));});
+                    }
+                    if(playingWhite){
+                        button_text.text = pieceToPromote + ">";
+                        b.onClick.AddListener(delegate{PromotePawn(pieceToPromote, o, new Vector2(1,1));});
+                    }
+
+                }else if(greaterThanCurrent){
+                    if(playingBlack){
+                        button_text.text = pieceToPromote + ">";
+                        b.onClick.AddListener(delegate{PromotePawn(pieceToPromote, o, new Vector2(-1,-1));});
+                    }
+                    if(playingWhite){
+                        button_text.text = "<" +pieceToPromote;
+                        b.onClick.AddListener(delegate{PromotePawn(pieceToPromote, o, new Vector2(-1,1));});
+                    }
+                }else{
+                    button_text.text = pieceToPromote + "^";
+                    if(playingBlack)
+                        b.onClick.AddListener(delegate{PromotePawn(pieceToPromote, o, new Vector2(0,-1));});
+                    else
+                        b.onClick.AddListener(delegate{PromotePawn(pieceToPromote, o, new Vector2(0,1));});
                 }
             }
         }
     }
 
-    private void Castle(string castleOptions){
+    private void Castle(int rookX, int kingX, Transform rook, Transform king){
+        king.transform.position += new Vector3(kingX,0,0); 
+        rook.transform.position += new Vector3(rookX,0,0); 
 
+        //Update board
+        _board[(int)king.transform.position.x, (int)king.transform.position.z] = king;
+        _board[(int)rook.transform.position.x, (int)rook.transform.position.z] = rook;
+        
+        var moveSyntax = "";
+        if(Mathf.Abs(rookX) == 3)
+            moveSyntax = "O-O-O";
+        else
+            moveSyntax = "O-O";
+
+        SendMoveToServer(new Vector2(), new Vector2(), moveSyntax, true);
+        UnselectPiece();
+        
+        playerTurn = false;
+        moveSelected = true;
     }
 
-    private void PromotePawn(Transform pawn, string toPromote){
+    private void PromotePawn(string toPromote, string serverSyntax , Vector2 positionChange){
+        Vector2 selectedPos = new Vector2 (Mathf.RoundToInt(selectedPiece.transform.position.x), Mathf.RoundToInt(selectedPiece.transform.position.z));
+        Vector2 destinationPos = selectedPos + positionChange;
 
+        //Update board
+        _board[(int)selectedPos.x, (int)selectedPos.y] = null;
+        Transform piece_in_destination = _board[Mathf.RoundToInt(destinationPos.x), Mathf.RoundToInt(destinationPos.y)];
+        _board[Mathf.RoundToInt(destinationPos.x), Mathf.RoundToInt(destinationPos.y)] = selectedPiece.transform;
+
+        if(piece_in_destination != null){
+            MovePieceToCementery(piece_in_destination);
+        }
+
+        //Update server and client visuals
+        SendMoveToServer(new Vector2(), new Vector2(), serverSyntax, true);
+        selectedPiece.gameObject.GetComponent<Piece>().MoveToPosition(destinationPos);
+        switch (toPromote)
+        {
+            case "Q":
+                selectedPiece.GetComponent<MeshFilter>().mesh = queenMesh;
+                break;
+
+            case "B":
+                selectedPiece.GetComponent<MeshFilter>().mesh = bishopMesh;
+                break;
+            
+            case "R":
+                selectedPiece.GetComponent<MeshFilter>().mesh = rookMesh;
+                break;
+
+            case "N":
+                selectedPiece.GetComponent<MeshFilter>().mesh = knightMesh;
+                break;
+
+            default:
+                Debug.Log("Something is fishy here, the promotion you asked for was: " + toPromote);
+                break;
+        }
+
+        UnselectPiece();
+        
+        playerTurn = false;
+        moveSelected = true;
     }
 
     private bool PlayerSelectionFrameRules(){
@@ -218,8 +355,10 @@ public class ChessManager : MonoBehaviour
             if(selectedPiece == null){ // Piece Selection
                 int layer_mask = LayerMask.GetMask("Pieces");
                 Physics.Raycast(ray,out hit,100f,layer_mask);
+
                 if(hit.point != new Vector3(0,0,0)){ // we hit a piece.
-                    if(hit.transform.GetComponent<Piece>().ownedByPlayer){
+                    if(hit.transform.GetComponent<Piece>().ownedByPlayer){ // the piece is owned by the player.
+
                         selectedPiece = hit.transform;
                         selectedPiece.GetComponent<Outline>().OutlineColor = Color.red;
                         var pieceSquare = squareNames[Mathf.RoundToInt(selectedPiece.transform.position.x), Mathf.RoundToInt(selectedPiece.transform.position.z)];
@@ -228,62 +367,60 @@ public class ChessManager : MonoBehaviour
                         var pieceType = selectedPiece.GetComponent<Piece>().pieceType;
 
                         // Checking castles
-
                         var castleMoves = stringmoves.FindAll(x => x.Substring(0,1) == "O");
 
                         if(castleMoves.Count != 0){
                             if(pieceType == "rook"){
-                                // RaycastHit[] hits = new RaycastHit[2];
-                                // Physics.Raycast(selectedPiece.transform.position + new Vector3(-0.75f, 0.5f, 0), Vector3.left, out hits[0], 10);
-                                // Physics.Raycast(selectedPiece.transform.position + new Vector3(0.75f, 0.5f, 0), Vector3.right, out hits[1], 10);
-                                
-                                // var aux1 = hits[0].transform.GetComponent<Piece>();
-                                // if(aux1 != null) aux1.pieceType == "king
-
                                 if(selectedPiece.transform.position.x == 0 && castleMoves.Contains("O-O-O")) //A-file rook
-                                    AddOptionPanelToPiece(new List<string>{"O-O-O"}, selectedPiece);
+                                    AddOptionPanelToSelectedPiece(new List<string>{"O-O-O"});
 
                                 if(selectedPiece.transform.position.x == 7 && castleMoves.Contains("O-O")) // H-file rook.
-                                    AddOptionPanelToPiece(new List<string>{"O-O"}, selectedPiece);
-                                
+                                    AddOptionPanelToSelectedPiece(new List<string>{"O-O"});
                             }
 
                             if(pieceType == "king"){
-                                AddOptionPanelToPiece(castleMoves, selectedPiece);
+                                AddOptionPanelToSelectedPiece(castleMoves);
                             }
                         }
 
-                        // Checking PawnPromotion
+                        bool pawnIsSelectedAndCanPromote = false;
+
+                        // Checking Pawn Promotion
                         if(pieceType == "pawn"){
                             var pawnPromotions = applicable_moves.FindAll(x => x.Contains("="));
                             if(pawnPromotions.Count != 0){
+                                pawnIsSelectedAndCanPromote = true;
                                 List<string> options = new List<string>();
                                 foreach (var promotion in pawnPromotions){ // There can be up to 12 pawn promotions
                                     options.Add(promotion);
                                 }
-                                AddOptionPanelToPiece(options, selectedPiece);
+                                AddOptionPanelToSelectedPiece(options);
                             }
                         }
 
-                        
+
                         // Highlight squares
-                        for (int i = squareNames.GetLowerBound(0); i <= squareNames.GetUpperBound(0); i++){
-                            for (int j = squareNames.GetLowerBound(1); j <= squareNames.GetUpperBound(1); j++){
-                                foreach (var move in applicable_moves){
-                                    if(move.Substring(2,2) == squareNames[i,j]){
-                                        _highlightSquares[i,j].SetActive(true);
-                                        validMoves.Add(new Vector2(i,j));
+                        if(!pawnIsSelectedAndCanPromote){
+                            for (int i = squareNames.GetLowerBound(0); i <= squareNames.GetUpperBound(0); i++){
+                                for (int j = squareNames.GetLowerBound(1); j <= squareNames.GetUpperBound(1); j++){
+                                    foreach (var move in applicable_moves){
+                                        if(move.Substring(2,2) == squareNames[i,j]){
+                                            _highlightSquares[i,j].SetActive(true);
+                                            validMoves.Add(new Vector2(i,j));
+                                        }
                                     }
                                 }
                             }
                         }
-
-
                     }
                 }
             }else{ // Move Piece
-                int layer_mask = LayerMask.GetMask("Board");
+                int layer_mask = LayerMask.GetMask(new string[]{"Board","UI"});
                 Physics.Raycast(ray, out hit, 100f, layer_mask);
+                
+                if(hit.transform.gameObject.layer == 5){// hits a UI layer object
+                    return false; // we leave the logic to the UI object.
+                }
 
                 var pointHit = new Vector2(Mathf.RoundToInt(hit.point.x), Mathf.RoundToInt(hit.point.z));
                 
@@ -343,6 +480,7 @@ public class ChessManager : MonoBehaviour
             selectedPiece.gameObject.GetComponent<Outline>().OutlineColor = Color.green;
             ResetHighLightSquares();
             validMoves.Clear();
+            Destroy(canvasInstance);
         }
         selectedPiece = null;
 }
@@ -362,6 +500,7 @@ public class ChessManager : MonoBehaviour
             foreach (var piece in GetAllPiecesAsArray("w"))
             {
                 var outline = piece.gameObject.AddComponent<Outline>();
+                outline.OutlineMode = Outline.Mode.OutlineVisible;
                 var p = piece.gameObject.AddComponent<Piece>();
                 outline.OutlineColor = Color.green;
                 outline.OutlineWidth = 7.5f;
@@ -380,6 +519,7 @@ public class ChessManager : MonoBehaviour
             foreach (var piece in GetAllPiecesAsArray("b"))
             {
                 var outline = piece.gameObject.AddComponent<Outline>();
+                outline.OutlineMode = Outline.Mode.OutlineVisible;
                 var p = piece.gameObject.AddComponent<Piece>();
                 outline.OutlineColor = Color.green;
                 outline.OutlineWidth = 7.5f;
@@ -421,6 +561,20 @@ public class ChessManager : MonoBehaviour
         currentTurnCheck = turn_info.SelectToken("in_check").Value<bool>();
     }
 
+    private void GetMoveSuggestionFromServer(){
+        var r = WebRequest.Create(url +"/games/"+gameKey+"/move_suggestion");
+        r.Method = "GET";
+        var response = r.GetResponse();
+        var response_stream = response.GetResponseStream();
+        var reader = new StreamReader(response_stream);
+        string data = reader.ReadToEnd();
+        JObject root = JObject.Parse(data);
+        var turn_info = root.SelectToken("turn_info");
+        Debug.Log("turn info: " + turn_info.ToString());
+        stringmoves = turn_info.SelectToken("moves").Values<string>().ToList();
+        currentTurnCheck = turn_info.SelectToken("in_check").Value<bool>();
+    }
+
     private void SendMoveToServer(Vector2 move_origin, Vector2 move_desination, string moveString, bool usingString){
         var r = WebRequest.Create(url +"/games/"+ gameKey +"/move");
         r.Method = "POST";
@@ -447,11 +601,6 @@ public class ChessManager : MonoBehaviour
     }
 
     private void InitializeBoard(){
-        var first_row_white = new Transform[]{ta1,cb1,ac1,Qw,Kw,af1,cg1,th1};
-        var pawn_row_white = new Transform[]{pa2,pb2,pc2,pd2,pe2,pf2,pg2,ph2};
-        var pawn_row_black = new Transform[]{pa7,pb7,pc7,pd7,pe7,pf7,pg7,ph7};
-        var first_row_black = new Transform[]{ta8,cb8,ac8,Qn,Kn,af8,cg8,th8};
-
         _board = new Transform[8,8]{
         { ta1, pa2,null,null,null,null,pa7,ta8},
         { cb1, pb2,null,null,null,null,pb7,cb8},
