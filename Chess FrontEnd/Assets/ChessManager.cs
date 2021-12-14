@@ -47,9 +47,13 @@ public class ChessManager : MonoBehaviour
 
     #endregion
 
-    void Start(){
+    
+    private void Awake() {
         InitializeBoard();
         InitializeSystem();
+    }
+
+    void Start(){
         UnlayerEnemyPieces();
         try{
             InitializeGameOnServer();
@@ -496,7 +500,7 @@ public class ChessManager : MonoBehaviour
         if(UnityEngine.Random.Range(0,2)==0){
             active = MCWhite.GetComponent<Camera>();
             playingWhite = true;    
-            MCWhite.SetActive(true);
+            // MCWhite.SetActive(true);
             foreach (var piece in GetAllPiecesAsArray("w"))
             {
                 var outline = piece.gameObject.AddComponent<Outline>();
@@ -515,7 +519,7 @@ public class ChessManager : MonoBehaviour
         }else{
             active = MCBlack.GetComponent<Camera>();
             playingBlack = true;
-            MCBlack.SetActive(true);
+            // MCBlack.SetActive(true);
             foreach (var piece in GetAllPiecesAsArray("b"))
             {
                 var outline = piece.gameObject.AddComponent<Outline>();
