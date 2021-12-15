@@ -11,7 +11,7 @@ public class RegulateMasterVolume : MonoBehaviour
     Camera active;
     Canvas volumeScrollerCanvas;
 
-    private void Start() {
+    public void Start() {
         active = Camera.allCameras[0];
         volumeScrollerCanvas = GetComponentInParent<Canvas>();
         volumeScrollerCanvas.worldCamera = active;

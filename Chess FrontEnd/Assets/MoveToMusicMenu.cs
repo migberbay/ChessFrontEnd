@@ -12,23 +12,30 @@ public class MoveToMusicMenu : MonoBehaviour
 
     int black_y = 270, white_y = -90, x_rot=35;
 
-    private void Start() {
+    public void Start() {
         active = Camera.allCameras[0];
         oldPosition = active.transform.position;
         oldRotation = active.transform.rotation.eulerAngles;
     }
 
     public void MoveActiveCameraToMusicMenu(){ 
-        StartCoroutine(MoveCam(true));
+        if(!cameraMoving)
+            StartCoroutine(MoveCam(true));
     }
 
     public void MoveActiveCameraToGame(){
-        StartCoroutine(MoveCam(false));
+        if(!cameraMoving)
+            StartCoroutine(MoveCam(false));
     }
 
     IEnumerator MoveCam(bool toMenu){
+        cameraMoving = true;
+
         Vector3 destination;
         Vector3 destinationRotation;
+
+        Vector3 originPos = active.transform.position;
+        Vector3 originRot = active.transform.rotation.eulerAngles; 
 
         if(toMenu){
             destination = musicTransform.position;
@@ -42,18 +49,14 @@ public class MoveToMusicMenu : MonoBehaviour
             destination = oldPosition;
 
             if(GameObject.FindObjectOfType<ChessManager>().playerColor() == "w"){
-                destinationRotation = new Vector3(65, 0, 0);
+                originRot = new Vector3(35,-90, 0);
+                destinationRotation = new Vector3(65, 1, 0);
             }else{
                 destinationRotation = new Vector3(65, 180, 0);
             }
         }
 
-        Vector3 originPos = active.transform.position;
-        Vector3 originRot = active.transform.rotation.eulerAngles; 
-
         float elapsed = 0;
-        cameraMoving = true;
-
         while(elapsed < transitionTime){
             active.transform.position = Vector3.Lerp(originPos, destination, elapsed/transitionTime);
             active.transform.rotation = Quaternion.Euler(Vector3.Lerp(originRot, destinationRotation, elapsed/transitionTime));
