@@ -505,8 +505,11 @@ public class ChessManager : MonoBehaviour
         rook.transform.position += new Vector3(rookX,0,0); 
 
         //Update board
-        _board[(int)king.transform.position.x, (int)king.transform.position.z] = king;
-        _board[(int)rook.transform.position.x, (int)rook.transform.position.z] = rook;
+        _board[(int)king.transform.position.x, (int)king.transform.position.z] = null;
+        _board[(int)rook.transform.position.x, (int)rook.transform.position.z] = null;
+
+        _board[(int)king.transform.position.x + kingX, (int)king.transform.position.z] = king;
+        _board[(int)rook.transform.position.x + rookX, (int)rook.transform.position.z] = rook;
         
         var moveSyntax = "";
         if(Mathf.Abs(rookX) == 3)
