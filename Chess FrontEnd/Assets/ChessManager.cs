@@ -7,7 +7,6 @@ using System.Net;
 using Newtonsoft.Json.Linq;
 using System.IO;
 using System.Text;
-using TMPro;
 
 public class ChessManager : MonoBehaviour
 {
@@ -59,6 +58,8 @@ public class ChessManager : MonoBehaviour
     GameObject canvasInstance;
     SoundManager soundM;
 
+    List<Coroutine> runningCorrutines = new List<Coroutine>();
+
     #endregion
 
     public string playerColor(){
@@ -103,6 +104,7 @@ public class ChessManager : MonoBehaviour
             playerTurn = true;
         }
         yield return new WaitForSeconds(0.5f);
+        Debug.Log("Game loop ended in: " + Time.time.ToString());
         StartCoroutine(GameLoop());
     }
 
@@ -149,16 +151,6 @@ public class ChessManager : MonoBehaviour
                     if(piece.pieceType == "pawn"){
                         p.GetComponent<MeshFilter>().mesh = pawnMesh;
                     }
-
-                    try{
-                        // Debug.Log("destroying Outline script from "+ p.name);
-                        Destroy(p.GetComponent<Outline>());
-                    }catch{Debug.Log("error getting rid of outline.");}
-
-                    try{
-                        // Debug.Log("destroying piece script from "+ p.name);
-                        Destroy(p.GetComponent<Piece>());
-                    }catch{Debug.Log("error getting rid of Piece script.");}
                 }
             }
         }
@@ -174,6 +166,9 @@ public class ChessManager : MonoBehaviour
         playingWhite = false;
         playerTurn = false;
         currentTurnCheck = false;
+
+        deadPiecesBlack = 0;
+        deadPiecesWhite = 0;
 
         this.StopAllCoroutines();
 
@@ -389,6 +384,22 @@ public class ChessManager : MonoBehaviour
         return null;
     }
 
+    private Sprite GetMoveImageCastle(string dir){
+        //castle_bl,castle_br,castle_wl,castle_wr;
+        
+        if(playingWhite){
+            if(dir == ">")
+                return castle_wr;
+            else
+                return castle_wl;
+        }else{
+            if(dir == ">")
+                return castle_br;
+            else
+                return castle_bl;
+        }
+    }
+
     private void AddOptionPanelToSelectedPiece(List<string> options){
         canvasInstance = Instantiate(CanvasOptionPrefab);
         canvasInstance.transform.position = new Vector3(selectedPiece.transform.position.x, 2.5f, selectedPiece.transform.position.z);
@@ -410,49 +421,53 @@ public class ChessManager : MonoBehaviour
             var button_image = buttonInstance.GetComponentInChildren<Image>();
 
             var pieceType = selectedPiece.GetComponent<Piece>().pieceType;
-            if(o == "O-O-O"){
-                if(pieceType == "rook"){
-                    if(playingWhite){
-                        button_image.sprite = bbf;// "C->";
-                        b.onClick.AddListener(delegate{Castle(3,-2, selectedPiece, Kw);});
-                    }
-                    if(playingBlack){
-                        b.onClick.AddListener(delegate{Castle(3,-2, selectedPiece, Kn);});
-                        button_image.sprite = bbf;//"<-C";
-                    }
-                }else{
-                    if(playingWhite){
-                        button_image.sprite = bbf;//"<-C";
-                        b.onClick.AddListener(delegate{Castle(3,-2, ta1, selectedPiece);});
-                    }
-                    if(playingBlack){
-                        button_image.sprite = bbf;//"C->";
-                        b.onClick.AddListener(delegate{Castle(3,-2, ta8, selectedPiece);});
-                    }
-                }  
-            }
+            if(!currentTurnCheck){
+                if(o == "O-O-O"){
+                    if(pieceType == "rook"){
+                        if(playingWhite){
+                            button_image.sprite = GetMoveImageCastle(">");
+                            b.onClick.AddListener(delegate{Castle(3,-2, selectedPiece, Kw);});
+                        }
+                        if(playingBlack){
+                            button_image.sprite = GetMoveImageCastle("<");
+                            b.onClick.AddListener(delegate{Castle(3,-2, selectedPiece, Kn);});
+                        }
+                    }else{
+                        if(playingWhite){
+                            button_image.sprite = GetMoveImageCastle("<");//"<-C";
+                            b.onClick.AddListener(delegate{Castle(3,-2, ta1, selectedPiece);});
+                        }
+                        if(playingBlack){
+                            button_image.sprite = GetMoveImageCastle(">");//"C->";
+                            b.onClick.AddListener(delegate{Castle(3,-2, ta8, selectedPiece);});
+                        }
+                    }  
+                }
 
-            if(o == "O-O"){
-                if(pieceType == "rook"){
-                    if(playingWhite){
-                        button_image.sprite = bbf;//"<-C";
-                        b.onClick.AddListener(delegate{Castle(-2,2, selectedPiece, Kw);});
-                    }
-                    if(playingBlack){
-                        button_image.sprite = bbf;//"C->";
-                        b.onClick.AddListener(delegate{Castle(-2,2, selectedPiece, Kn);});
-                    }
-                }else{
-                    if(playingWhite){
-                        button_image.sprite = bbf;//"C->";
-                        b.onClick.AddListener(delegate{Castle(-2,2, th1, selectedPiece);});
-                    }
-                    if(playingBlack){
-                        button_image.sprite = bbf;//"<-C";
-                        b.onClick.AddListener(delegate{Castle(-2,2, th8, selectedPiece);});
+                if(o == "O-O"){
+                    if(pieceType == "rook"){
+                        if(playingWhite){
+                            button_image.sprite = GetMoveImageCastle("<");//"<-C";
+                            b.onClick.AddListener(delegate{Castle(-2,2, selectedPiece, Kw);});
+                        }
+                        if(playingBlack){
+                            button_image.sprite = GetMoveImageCastle(">");//"C->";
+                            b.onClick.AddListener(delegate{Castle(-2,2, selectedPiece, Kn);});
+                        }
+                    }else{
+                        if(playingWhite){
+                            button_image.sprite = GetMoveImageCastle(">");//"C->";
+                            b.onClick.AddListener(delegate{Castle(-2,2, th1, selectedPiece);});
+                        }
+                        if(playingBlack){
+                            button_image.sprite = GetMoveImageCastle("<");//"<-C";
+                            b.onClick.AddListener(delegate{Castle(-2,2, th8, selectedPiece);});
+                        }
                     }
                 }
             }
+
+            
 
             if(pieceType == "pawn"){
                 var originFile = o.Substring(0,1);
@@ -501,15 +516,16 @@ public class ChessManager : MonoBehaviour
     }
 
     private void Castle(int rookX, int kingX, Transform rook, Transform king){
-        king.transform.position += new Vector3(kingX,0,0); 
-        rook.transform.position += new Vector3(rookX,0,0); 
-
         //Update board
         _board[(int)king.transform.position.x, (int)king.transform.position.z] = null;
         _board[(int)rook.transform.position.x, (int)rook.transform.position.z] = null;
 
         _board[(int)king.transform.position.x + kingX, (int)king.transform.position.z] = king;
         _board[(int)rook.transform.position.x + rookX, (int)rook.transform.position.z] = rook;
+
+        //Update pieces.
+        king.transform.position += new Vector3(kingX,0,0); 
+        rook.transform.position += new Vector3(rookX,0,0); 
         
         var moveSyntax = "";
         if(Mathf.Abs(rookX) == 3)
@@ -577,6 +593,7 @@ public class ChessManager : MonoBehaviour
             if(selectedPiece == null){ // Piece Selection
                 int layer_mask = LayerMask.GetMask("Pieces");
                 Physics.Raycast(ray,out hit,100f,layer_mask);
+                Debug.Log("Cheking for pieces");
 
                 if(hit.point != new Vector3(0,0,0)){ // we hit a piece.
                     if(hit.transform.GetComponent<Piece>().ownedByPlayer){ // the piece is owned by the player.
@@ -639,6 +656,7 @@ public class ChessManager : MonoBehaviour
             }else{ // Move Piece
                 int layer_mask = LayerMask.GetMask(new string[]{"Board","UI"});
                 Physics.Raycast(ray, out hit, 100f, layer_mask);
+                Debug.Log("Cheking for board");
 
                 try{
                     if(hit.transform.gameObject.layer == 5)// hits a UI layer object
@@ -704,7 +722,6 @@ public class ChessManager : MonoBehaviour
         }
     }
 
-
     private void UnselectPiece(){
         if(selectedPiece != null){
             selectedPiece.gameObject.GetComponent<Outline>().OutlineColor = Color.green;
@@ -733,36 +750,80 @@ public class ChessManager : MonoBehaviour
             foreach (var piece in GetAllPiecesAsArray("w"))
             {
                 var outline = piece.gameObject.AddComponent<Outline>();
-                outline.OutlineMode = Outline.Mode.OutlineVisible;
-                var p = piece.gameObject.AddComponent<Piece>();
+                try{
+                    outline.OutlineMode = Outline.Mode.OutlineVisible;
+                }catch{
+                    outline = piece.GetComponent<Outline>();
+                    outline.enabled = false;
+                }
+
+                if(piece.GetComponent<Piece>() == null){
+                    var p = piece.gameObject.AddComponent<Piece>();
+                    p.enabled = true;
+                    p.ownedByPlayer = true;
+                }
+
                 outline.OutlineColor = Color.green;
                 outline.OutlineWidth = 5f;
-                p.ownedByPlayer = true;
+                
             }
-            foreach (var piece in GetAllPiecesAsArray("b"))
-            {
-                var p = piece.gameObject.AddComponent<Piece>();
-                p.ownedByPlayer = false;
+
+            foreach (var piece in GetAllPiecesAsArray("b")){ //rival pieces.
+                if(piece.GetComponent<Piece>() == null){
+                    var p = piece.gameObject.AddComponent<Piece>();
+                    p.ownedByPlayer = false;
+                    p.enabled = true;
+                }
+
+                var outline = piece.gameObject.AddComponent<Outline>();
+                try{
+                    outline.OutlineMode = Outline.Mode.OutlineVisible;
+                }catch{
+                    Debug.Log(piece.transform.name);
+                    outline = piece.GetComponent<Outline>();
+                    outline.enabled = false;
+                }
             }
             playerTurn = true;
+
         }else{
+
             active = MCBlack.GetComponent<Camera>();
             playingBlack = true;
             MCBlack.SetActive(true);
             foreach (var piece in GetAllPiecesAsArray("b"))
             {
                 var outline = piece.gameObject.AddComponent<Outline>();
-                outline.OutlineMode = Outline.Mode.OutlineVisible;
-                var p = piece.gameObject.AddComponent<Piece>();
-                outline.OutlineColor = Color.green;
-                outline.OutlineWidth = 5f;
-                p.ownedByPlayer = true;
+                try{
+                    outline.OutlineMode = Outline.Mode.OutlineVisible;
+                }catch{
+                    outline = piece.GetComponent<Outline>();
+                    outline.enabled = false;
+                    outline.OutlineColor = Color.green;
+                    outline.OutlineWidth = 5f;
+                }
+
+                if(piece.GetComponent<Piece>() == null){
+                    var p = piece.gameObject.AddComponent<Piece>();
+                    p.ownedByPlayer = true;
+                    p.enabled = true;
+                }
             }
 
-            foreach (var piece in GetAllPiecesAsArray("w"))
-            {
-                var p = piece.gameObject.AddComponent<Piece>();
-                p.ownedByPlayer = false;
+            foreach (var piece in GetAllPiecesAsArray("w")){ // enemy pieces.
+                if(piece.GetComponent<Piece>() == null){
+                    var p = piece.gameObject.AddComponent<Piece>();
+                    p.ownedByPlayer = false;
+                }
+
+                var outline = piece.gameObject.AddComponent<Outline>();
+                try{
+                    outline.OutlineMode = Outline.Mode.OutlineVisible;
+                }catch{
+                    Debug.Log(piece.transform.name);
+                    outline = piece.GetComponent<Outline>();
+                    outline.enabled = false;
+                }
             }
             playerTurn = false;
         }

@@ -6,8 +6,9 @@ public class Piece : MonoBehaviour
 {
     public bool ownedByPlayer;
     public string pieceType;
+    public Outline outline;
     
-    private void Start() {
+    public void Start() {
         if(gameObject.name.StartsWith("P"))
             pieceType = "pawn";
         
@@ -25,9 +26,26 @@ public class Piece : MonoBehaviour
         
         if(gameObject.name.EndsWith("K"))
             pieceType = "king";
+
+        try{
+            outline = GetComponent<Outline>();
+            outline.enabled = false;
+        }catch{
+
+        }
     }
 
     public void MoveToPosition(Vector2 destination){
         transform.position = new Vector3(destination.x, transform.position.y, destination.y);
+    }
+
+    private void OnMouseOver() {
+        if(outline != null)
+            outline.enabled = true;
+    }
+
+    private void OnMouseExit() {
+        if(outline != null)
+            outline.enabled = false;
     }
 }
