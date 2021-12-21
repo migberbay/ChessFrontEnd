@@ -4,7 +4,7 @@ using UnityEngine;
 
 public class Piece : MonoBehaviour
 {
-    public bool ownedByPlayer;
+    public bool ownedByPlayer, isSelected = false;
     public string pieceType;
     public Outline outline;
     
@@ -40,12 +40,17 @@ public class Piece : MonoBehaviour
     }
 
     private void OnMouseOver() {
-        if(outline != null)
+        if(outline != null && ownedByPlayer)
             outline.enabled = true;
     }
 
     private void OnMouseExit() {
-        if(outline != null)
+        if(outline != null && !isSelected)
             outline.enabled = false;
+    }
+
+    public void Unselect(){
+        outline.enabled = false;
+        isSelected = false;
     }
 }

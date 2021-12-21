@@ -39,7 +39,9 @@ public class ChessManager : MonoBehaviour
 
     Transform[,] _board =  new Transform[8,8];
     int deadPiecesWhite = 0, deadPiecesBlack = 0;
-    bool moveSelected, playingWhite = false, playingBlack = false, playerTurn = false, currentTurnCheck = false;
+    bool moveSelected, playingWhite = false, playingBlack = false, playerTurn = false, currentTurnCheck = false, isGameLoopRunning = false;
+    float timeGameLoopInactive = 0f;
+
     Transform selectedPiece;
     List<Vector2> validMoves = new List<Vector2>();
     string[,] squareNames = new string[8,8]{
@@ -58,7 +60,6 @@ public class ChessManager : MonoBehaviour
     GameObject canvasInstance;
     SoundManager soundM;
 
-    List<Coroutine> runningCorrutines = new List<Coroutine>();
 
     #endregion
 
@@ -94,6 +95,7 @@ public class ChessManager : MonoBehaviour
         if(playerTurn){
             moveSelected = false;
             while(!moveSelected){
+                isGameLoopRunning = true;
                 moveSelected = PlayerSelectionFrameRules();
                 yield return null;
             }
@@ -106,6 +108,23 @@ public class ChessManager : MonoBehaviour
         yield return new WaitForSeconds(0.5f);
         Debug.Log("Game loop ended in: " + Time.time.ToString());
         StartCoroutine(GameLoop());
+    }
+
+    private void Update() {
+        isGameLoopRunning = false;
+    }
+
+    private void FixedUpdate() {
+        if(isGameLoopRunning){
+            timeGameLoopInactive = 0f;
+            return;
+        }
+
+        timeGameLoopInactive += Time.fixedDeltaTime;
+        if(timeGameLoopInactive >= 3f){
+            timeGameLoopInactive = 0f;
+            Debug.Log("GameLoop is not running...");
+        }
     }
 
     private bool CheckGameDoneConditions(){
@@ -597,13 +616,15 @@ public class ChessManager : MonoBehaviour
 
                 if(hit.point != new Vector3(0,0,0)){ // we hit a piece.
                     if(hit.transform.GetComponent<Piece>().ownedByPlayer){ // the piece is owned by the player.
-
                         selectedPiece = hit.transform;
+
                         selectedPiece.GetComponent<Outline>().OutlineColor = Color.red;
                         var pieceSquare = squareNames[Mathf.RoundToInt(selectedPiece.transform.position.x), Mathf.RoundToInt(selectedPiece.transform.position.z)];
                         List<string> applicable_moves = new List<string>(stringmoves.FindAll(x => x.Substring(0,2) == pieceSquare));
                         
-                        var pieceType = selectedPiece.GetComponent<Piece>().pieceType;
+                        var pieceScript = selectedPiece.GetComponent<Piece>();
+                        var pieceType = pieceScript.pieceType;
+                        pieceScript.isSelected = true;
 
                         // Checking castles
                         var castleMoves = stringmoves.FindAll(x => x.Substring(0,1) == "O");
@@ -708,15 +729,13 @@ public class ChessManager : MonoBehaviour
 
     private void UnlayerEnemyPieces(){
         if(playingBlack){
-            foreach (var p in GetAllPiecesAsArray("w"))
-            {
+            foreach (var p in GetAllPiecesAsArray("w")){
                 p.gameObject.layer = 0;
             }
         }
 
         if(playingWhite){
-            foreach (var p in GetAllPiecesAsArray("b"))
-            {
+            foreach (var p in GetAllPiecesAsArray("b")){
                 p.gameObject.layer = 0;
             }
         }
@@ -725,6 +744,7 @@ public class ChessManager : MonoBehaviour
     private void UnselectPiece(){
         if(selectedPiece != null){
             selectedPiece.gameObject.GetComponent<Outline>().OutlineColor = Color.green;
+            selectedPiece.GetComponent<Piece>().Unselect();
             ResetHighLightSquares();
             validMoves.Clear();
             Destroy(canvasInstance);
@@ -739,6 +759,31 @@ public class ChessManager : MonoBehaviour
         }
     }
 
+    private void SetOutlineAndPiece(Transform piece, bool pieceActive){
+        Outline outline = piece.GetComponent<Outline>();
+
+        if(outline == null){
+            Debug.Log("adding outline component to piece");
+            outline = piece.gameObject.AddComponent<Outline>();
+        }else{
+            outline = piece.gameObject.GetComponent<Outline>();
+        }
+
+        outline.enabled = false;
+        outline.OutlineColor = Color.green;
+        outline.OutlineMode = Outline.Mode.OutlineVisible;
+        outline.OutlineWidth = 5f;
+        
+        Piece pieceScript = piece.GetComponent<Piece>();
+        if(pieceScript == null){
+            pieceScript = piece.gameObject.AddComponent<Piece>();
+        }else{
+            pieceScript = piece.gameObject.GetComponent<Piece>();
+        }
+        pieceScript.enabled = pieceActive;
+        pieceScript.ownedByPlayer = pieceActive;
+    }
+
     private void InitializeSystem(){
         int side = UnityEngine.Random.Range(0,2);
         // side = 1;
@@ -747,86 +792,27 @@ public class ChessManager : MonoBehaviour
             active = MCWhite.GetComponent<Camera>();
             playingWhite = true;    
             MCWhite.SetActive(true);
-            foreach (var piece in GetAllPiecesAsArray("w"))
-            {
-                var outline = piece.gameObject.AddComponent<Outline>();
-                try{
-                    outline.OutlineMode = Outline.Mode.OutlineVisible;
-                }catch{
-                    outline = piece.GetComponent<Outline>();
-                    outline.enabled = false;
-                }
 
-                if(piece.GetComponent<Piece>() == null){
-                    var p = piece.gameObject.AddComponent<Piece>();
-                    p.enabled = true;
-                    p.ownedByPlayer = true;
-                }
-
-                outline.OutlineColor = Color.green;
-                outline.OutlineWidth = 5f;
-                
+            foreach (var piece in GetAllPiecesAsArray("w")){ // PLAYER PIECES.
+                SetOutlineAndPiece(piece, true);
             }
-
-            foreach (var piece in GetAllPiecesAsArray("b")){ //rival pieces.
-                if(piece.GetComponent<Piece>() == null){
-                    var p = piece.gameObject.AddComponent<Piece>();
-                    p.ownedByPlayer = false;
-                    p.enabled = true;
-                }
-
-                var outline = piece.gameObject.AddComponent<Outline>();
-                try{
-                    outline.OutlineMode = Outline.Mode.OutlineVisible;
-                }catch{
-                    Debug.Log(piece.transform.name);
-                    outline = piece.GetComponent<Outline>();
-                    outline.enabled = false;
-                }
+            foreach (var piece in GetAllPiecesAsArray("b")){ // RIVAL PIECES.
+                SetOutlineAndPiece(piece, false);
             }
-            playerTurn = true;
-
         }else{
-
             active = MCBlack.GetComponent<Camera>();
             playingBlack = true;
             MCBlack.SetActive(true);
-            foreach (var piece in GetAllPiecesAsArray("b"))
-            {
-                var outline = piece.gameObject.AddComponent<Outline>();
-                try{
-                    outline.OutlineMode = Outline.Mode.OutlineVisible;
-                }catch{
-                    outline = piece.GetComponent<Outline>();
-                    outline.enabled = false;
-                    outline.OutlineColor = Color.green;
-                    outline.OutlineWidth = 5f;
-                }
-
-                if(piece.GetComponent<Piece>() == null){
-                    var p = piece.gameObject.AddComponent<Piece>();
-                    p.ownedByPlayer = true;
-                    p.enabled = true;
-                }
+            
+            foreach (var piece in GetAllPiecesAsArray("b")){ // PLAYER PIECES.
+                SetOutlineAndPiece(piece, true);
             }
-
-            foreach (var piece in GetAllPiecesAsArray("w")){ // enemy pieces.
-                if(piece.GetComponent<Piece>() == null){
-                    var p = piece.gameObject.AddComponent<Piece>();
-                    p.ownedByPlayer = false;
-                }
-
-                var outline = piece.gameObject.AddComponent<Outline>();
-                try{
-                    outline.OutlineMode = Outline.Mode.OutlineVisible;
-                }catch{
-                    Debug.Log(piece.transform.name);
-                    outline = piece.GetComponent<Outline>();
-                    outline.enabled = false;
-                }
+            foreach (var piece in GetAllPiecesAsArray("w")){ // RIVAL PIECES.
+                SetOutlineAndPiece(piece, false);
             }
-            playerTurn = false;
         }
+
+        playerTurn = false;
     }
 
     private void InitializeGameOnServer(){
