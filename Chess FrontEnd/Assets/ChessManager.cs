@@ -799,6 +799,7 @@ public class ChessManager : MonoBehaviour
             foreach (var piece in GetAllPiecesAsArray("b")){ // RIVAL PIECES.
                 SetOutlineAndPiece(piece, false);
             }
+            playerTurn = true;
         }else{
             active = MCBlack.GetComponent<Camera>();
             playingBlack = true;
@@ -810,9 +811,8 @@ public class ChessManager : MonoBehaviour
             foreach (var piece in GetAllPiecesAsArray("w")){ // RIVAL PIECES.
                 SetOutlineAndPiece(piece, false);
             }
+            playerTurn = false;
         }
-
-        playerTurn = false;
     }
 
     private void InitializeGameOnServer(){
