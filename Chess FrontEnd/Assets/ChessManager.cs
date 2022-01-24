@@ -7,10 +7,13 @@ using System.Net;
 using Newtonsoft.Json.Linq;
 using System.IO;
 using System.Text;
+using System.Threading.Tasks;
 
 public class ChessManager : MonoBehaviour
 {
     #region declarations
+
+    public GameObject Tablero;
 
     [Header("Pieces")]
     [Space(1)]
@@ -28,6 +31,7 @@ public class ChessManager : MonoBehaviour
 
     [Header("Logic")]
     [Space(1)]
+    public bool startPlayerAsWhite = true;
 
     public Transform whiteCementery;
     public Transform blackCementery;
@@ -103,7 +107,7 @@ public class ChessManager : MonoBehaviour
         }else{ // if is not player turn.
             // DoAIMove(true); // performs a random move.
             DoAIMove(false); // gets a move from the server and executes it.
-            playerTurn = true;
+            // playerTurn = true;
         }
         yield return new WaitForSeconds(0.5f);
         Debug.Log("Game loop ended in: " + Time.time.ToString());
@@ -215,23 +219,24 @@ public class ChessManager : MonoBehaviour
             rb.isKinematic = false;
         }
 
-        var numexplosions = 20;
-        var explosionforce = 7.5f;
-        var explosionRadius = 3f;
+        var explosionforce = 20f;
+        var explosionRadius = 15f;
 
-        float xmin = -1, xmax = 8 , zmax = 8, zmin = -1;
-        for (int i = 0; i < numexplosions; i++)
-        {   
-            var explosionOrigin = new Vector3(Random.Range(xmin,xmax) ,1, Random.Range(zmin,zmax));
-            foreach (var piece in Physics.OverlapSphere(explosionOrigin, explosionRadius))
-            {
-                if(piece.GetComponent<Piece>() != null)
-                    piece.GetComponent<Rigidbody>().AddExplosionForce(explosionforce, explosionOrigin, explosionRadius, 0, ForceMode.Impulse);
-            }
-            yield return new WaitForSeconds(0.1f);
+        var Trb = Tablero.GetComponent<Rigidbody>();
+
+        foreach (var piece in GetAllPiecesAsArray("w")){
+            Debug.Log("peto la pieza: " + piece);
+            piece.GetComponent<Rigidbody>().AddExplosionForce(explosionforce, Tablero.transform.position + new Vector3(0,-5,0), explosionRadius, 0, ForceMode.Impulse);
+        }
+
+        foreach (var piece in GetAllPiecesAsArray("b")){
+            Debug.Log("peto la pieza: " + piece);
+            piece.GetComponent<Rigidbody>().AddExplosionForce(explosionforce, Tablero.transform.position-new Vector3(0,-5,0), explosionRadius, 0, ForceMode.Impulse);
         }
 
         PresentResetMenu();
+
+        yield return null;
     }
 
     public void QuitGame(){
@@ -239,7 +244,7 @@ public class ChessManager : MonoBehaviour
         Debug.Log("this quits the game on built application");
     }
 
-    private void DoAIMove(bool random){
+    async private void DoAIMove(bool random){
         Vector2 aux = new Vector2();
         // pick random from stringmoves and send it back
         var chosenMove = "";
@@ -247,41 +252,94 @@ public class ChessManager : MonoBehaviour
         if(random)
             chosenMove = stringmoves[Random.Range(0,stringmoves.Count)];
         else
-            chosenMove = GetMoveSuggestionFromServer();
+            chosenMove = await GetMoveSuggestionFromServer();
 
-        Vector2 origin = new Vector2(), destination = new Vector2();
+        bool moveIsCastle = false;
 
-        for (int i = squareNames.GetLowerBound(0); i <= squareNames.GetUpperBound(0); i++){
-            for (int j = squareNames.GetLowerBound(1); j <= squareNames.GetUpperBound(1); j++){
-                if(squareNames[i,j] == chosenMove.Substring(0,2)){
-                    origin.x = i;
-                    origin.y = j;
+        if(chosenMove == "O-O-O"){
+            if(playerColor() == "w")// black
+                Castle(3,-3, ta8, selectedPiece, false);
+            else
+                Castle(3,-3, ta1, selectedPiece, false);
+            
+            SendMoveToServer(new Vector2(), new Vector2(), "O-O-O", true);
+            moveIsCastle = true;
+        }
+
+        if(chosenMove == "O-O"){
+            if(playerColor() == "w")// black
+                Castle(-2,2, th8, Kn, false);
+            else
+                Castle(-2,2, th1, Kw, false);
+
+            SendMoveToServer(new Vector2(), new Vector2(), "O-O", true);
+            moveIsCastle = true;
+        }
+
+        if(!moveIsCastle){
+
+            Vector2 origin = new Vector2(), destination = new Vector2();
+
+            for (int i = squareNames.GetLowerBound(0); i <= squareNames.GetUpperBound(0); i++){
+                for (int j = squareNames.GetLowerBound(1); j <= squareNames.GetUpperBound(1); j++){
+                    if(squareNames[i,j] == chosenMove.Substring(0,2)){
+                        origin.x = i;
+                        origin.y = j;
+                    }
+                    
+                    if(squareNames[i,j] == chosenMove.Substring(2,2)){
+                        destination.x = i;
+                        destination.y = j;
+                    }
+
+                    if(origin != new Vector2() && destination != new Vector2()){break;}
                 }
-                
-                if(squareNames[i,j] == chosenMove.Substring(2,2)){
-                    destination.x = i;
-                    destination.y = j;
-                }
-
-                if(origin != new Vector2() && destination != new Vector2()){break;}
             }
+
+            // Move in client
+            Transform enemyPiece = _board[(int)origin.x, (int)origin.y];
+            enemyPiece.gameObject.GetComponent<Piece>().MoveToPosition(destination);
+            soundM.PlayChessMoveSound();
+
+            _board[(int)origin.x, (int)origin.y] = null;
+            Transform piece_in_destination = _board[(int)destination.x, (int)destination.y];
+            _board[(int)destination.x, (int)destination.y] = enemyPiece.transform;
+
+            if(piece_in_destination != null){ // this is an enemy move so we send the piece to enemy cementery
+                MovePieceToCementery(piece_in_destination);
+            }
+
+            if(chosenMove.Contains("=")){
+                var promoteTo = chosenMove.Substring(chosenMove.Length - 1);
+                switch (promoteTo){
+                    case "Q":
+                        enemyPiece.GetComponent<MeshFilter>().mesh = queenMesh;
+                        break;
+
+                    case "B":
+                        enemyPiece.GetComponent<MeshFilter>().mesh = bishopMesh;
+                        break;
+                    
+                    case "R":
+                        enemyPiece.GetComponent<MeshFilter>().mesh = rookMesh;
+                        break;
+
+                    case "N":
+                        enemyPiece.GetComponent<MeshFilter>().mesh = knightMesh;
+                        break;
+
+                    default:
+                        Debug.Log("Something is fishy here, the promotion you asked for was: " + promoteTo);
+                        break;
+                }
+            }
+
+            //Update server and client visuals
+            SendMoveToServer(aux, aux, chosenMove, true);
+
         }
-        // Move in client
-        Transform enemyPiece = _board[(int)origin.x, (int)origin.y];
-        enemyPiece.gameObject.GetComponent<Piece>().MoveToPosition(destination);
-        soundM.PlayChessMoveSound();
 
-        _board[(int)origin.x, (int)origin.y] = null;
-        Transform piece_in_destination = _board[(int)destination.x, (int)destination.y];
-        _board[(int)destination.x, (int)destination.y] = enemyPiece.transform;
-
-        if(piece_in_destination != null){ // this is an enemy move so we send the piece to enemy cementery
-            MovePieceToCementery(piece_in_destination);
-        }
-
-
-        //Update server and client visuals
-        SendMoveToServer(aux, aux, chosenMove, true);
+        playerTurn = true;
     }
 
     private void MovePieceToCementery(Transform piece){
@@ -445,20 +503,20 @@ public class ChessManager : MonoBehaviour
                     if(pieceType == "rook"){
                         if(playingWhite){
                             button_image.sprite = GetMoveImageCastle(">");
-                            b.onClick.AddListener(delegate{Castle(3,-2, selectedPiece, Kw);});
+                            b.onClick.AddListener(delegate{Castle(3,-2, selectedPiece, Kw, true);});
                         }
                         if(playingBlack){
                             button_image.sprite = GetMoveImageCastle("<");
-                            b.onClick.AddListener(delegate{Castle(3,-2, selectedPiece, Kn);});
+                            b.onClick.AddListener(delegate{Castle(3,-2, selectedPiece, Kn, true);});
                         }
                     }else{
                         if(playingWhite){
                             button_image.sprite = GetMoveImageCastle("<");//"<-C";
-                            b.onClick.AddListener(delegate{Castle(3,-2, ta1, selectedPiece);});
+                            b.onClick.AddListener(delegate{Castle(3,-2, ta1, selectedPiece, true);});
                         }
                         if(playingBlack){
                             button_image.sprite = GetMoveImageCastle(">");//"C->";
-                            b.onClick.AddListener(delegate{Castle(3,-2, ta8, selectedPiece);});
+                            b.onClick.AddListener(delegate{Castle(3,-2, ta8, selectedPiece, true);});
                         }
                     }  
                 }
@@ -467,20 +525,20 @@ public class ChessManager : MonoBehaviour
                     if(pieceType == "rook"){
                         if(playingWhite){
                             button_image.sprite = GetMoveImageCastle("<");//"<-C";
-                            b.onClick.AddListener(delegate{Castle(-2,2, selectedPiece, Kw);});
+                            b.onClick.AddListener(delegate{Castle(-2,2, selectedPiece, Kw, true);});
                         }
                         if(playingBlack){
                             button_image.sprite = GetMoveImageCastle(">");//"C->";
-                            b.onClick.AddListener(delegate{Castle(-2,2, selectedPiece, Kn);});
+                            b.onClick.AddListener(delegate{Castle(-2,2, selectedPiece, Kn, true);});
                         }
                     }else{
                         if(playingWhite){
                             button_image.sprite = GetMoveImageCastle(">");//"C->";
-                            b.onClick.AddListener(delegate{Castle(-2,2, th1, selectedPiece);});
+                            b.onClick.AddListener(delegate{Castle(-2,2, th1, selectedPiece, true);});
                         }
                         if(playingBlack){
                             button_image.sprite = GetMoveImageCastle("<");//"<-C";
-                            b.onClick.AddListener(delegate{Castle(-2,2, th8, selectedPiece);});
+                            b.onClick.AddListener(delegate{Castle(-2,2, th8, selectedPiece, true);});
                         }
                     }
                 }
@@ -534,7 +592,7 @@ public class ChessManager : MonoBehaviour
         }
     }
 
-    private void Castle(int rookX, int kingX, Transform rook, Transform king){
+    private void Castle(int rookX, int kingX, Transform rook, Transform king, bool isplayer){
         //Update board
         _board[(int)king.transform.position.x, (int)king.transform.position.z] = null;
         _board[(int)rook.transform.position.x, (int)rook.transform.position.z] = null;
@@ -546,17 +604,20 @@ public class ChessManager : MonoBehaviour
         king.transform.position += new Vector3(kingX,0,0); 
         rook.transform.position += new Vector3(rookX,0,0); 
         
-        var moveSyntax = "";
-        if(Mathf.Abs(rookX) == 3)
-            moveSyntax = "O-O-O";
-        else
-            moveSyntax = "O-O";
+        if(isplayer){
+            var moveSyntax = "";
+            if(Mathf.Abs(rookX) == 3)
+                moveSyntax = "O-O-O";
+            else
+                moveSyntax = "O-O";
 
-        SendMoveToServer(new Vector2(), new Vector2(), moveSyntax, true);
-        UnselectPiece();
-        
-        playerTurn = false;
-        moveSelected = true;
+            SendMoveToServer(new Vector2(), new Vector2(), moveSyntax, true);
+            UnselectPiece();
+            soundM.PlayChessMoveSound();
+            
+            playerTurn = false;
+            moveSelected = true;
+        }
     }
 
     private void PromotePawn(string toPromote, string serverSyntax , Vector2 positionChange){
@@ -785,8 +846,11 @@ public class ChessManager : MonoBehaviour
     }
 
     private void InitializeSystem(){
-        int side = UnityEngine.Random.Range(0,2);
+        // int side = UnityEngine.Random.Range(0,2);
         // side = 1;
+
+        int side = startPlayerAsWhite ? 0:1;
+
 
         if(side==0){
             active = MCWhite.GetComponent<Camera>();
@@ -841,7 +905,7 @@ public class ChessManager : MonoBehaviour
         currentTurnCheck = turn_info.SelectToken("in_check").Value<bool>();
     }
 
-    private string GetMoveSuggestionFromServer(){
+    async private Task<string> GetMoveSuggestionFromServer(){
         var r = WebRequest.Create(url +"/games/"+gameKey+"/move_suggestion");
         r.Method = "GET";
         var response = r.GetResponse();

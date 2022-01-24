@@ -3997,8 +3997,8 @@ Rigidbody:
   m_Mass: 1
   m_Drag: 0
   m_AngularDrag: 0.05
-  m_UseGravity: 1
-  m_IsKinematic: 0
+  m_UseGravity: 0
+  m_IsKinematic: 1
   m_Interpolate: 0
   m_Constraints: 0
   m_CollisionDetection: 3
@@ -11540,6 +11540,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 8fb658b82e91ec7409075b6c56c23638, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  Tablero: {fileID: 832149486167989930}
   pa7: {fileID: 4487018107211311117}
   pb7: {fileID: 981200899}
   pc7: {fileID: 298629817}
@@ -11600,6 +11601,7 @@ MonoBehaviour:
   castle_br: {fileID: 21300000, guid: e4a758d47069dc0479002cc0d102f995, type: 3}
   castle_wl: {fileID: 21300000, guid: dfaa83540c61dae4d9fd89035a3a7ba9, type: 3}
   castle_wr: {fileID: 21300000, guid: b1b8f966e19f3bb4caaffb576c3ab166, type: 3}
+  startPlayerAsWhite: 1
   whiteCementery: {fileID: 721024020}
   blackCementery: {fileID: 1315050816}
   MCWhite: {fileID: 638653434}
@@ -12567,7 +12569,10 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   ownedByPlayer: 1
+  isSelected: 0
+  pieceIsMoving: 0
   pieceType: 
+  outline: {fileID: 0}
 --- !u!4 &543450653053279494
 Transform:
   m_ObjectHideFlags: 0
@@ -12663,7 +12668,7 @@ Rigidbody:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 832149486167989930}
   serializedVersion: 2
-  m_Mass: 0.0000001
+  m_Mass: 1
   m_Drag: 0
   m_AngularDrag: 0.05
   m_UseGravity: 1

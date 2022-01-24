@@ -4,7 +4,7 @@ using UnityEngine;
 
 public class Piece : MonoBehaviour
 {
-    public bool ownedByPlayer, isSelected = false;
+    public bool ownedByPlayer, isSelected = false, pieceIsMoving = false;
     public string pieceType;
     public Outline outline;
     
@@ -36,7 +36,24 @@ public class Piece : MonoBehaviour
     }
 
     public void MoveToPosition(Vector2 destination){
-        transform.position = new Vector3(destination.x, transform.position.y, destination.y);
+        var origin = transform.position;
+        var dest = new Vector3(destination.x, transform.position.y, destination.y);
+        StartCoroutine(MoveParabolaPiece(origin, dest));
+    }
+    
+    IEnumerator MoveParabolaPiece(Vector3 origin, Vector3 destination){
+        Debug.Log("I run lmao");
+        float maxTime = 0.75f, currentTime = 0;
+        pieceIsMoving = true;
+        while(maxTime > currentTime){
+            var pos = Vector3.Lerp(origin, destination, currentTime/maxTime);
+            transform.position = pos;
+            currentTime += Time.deltaTime;
+            // Debug.Log("movement hapening: "+ currentTime.ToString());
+            yield return null;
+        }
+        transform.position = destination;
+        pieceIsMoving = false;
     }
 
     private void OnMouseOver() {
