@@ -38,11 +38,10 @@ public class Piece : MonoBehaviour
     public void MoveToPosition(Vector2 destination){
         var origin = transform.position;
         var dest = new Vector3(destination.x, transform.position.y, destination.y);
-        StartCoroutine(MoveParabolaPiece(origin, dest));
+        StartCoroutine(MovePiece(origin, dest));
     }
     
-    IEnumerator MoveParabolaPiece(Vector3 origin, Vector3 destination){
-        Debug.Log("I run lmao");
+    IEnumerator MovePiece(Vector3 origin, Vector3 destination){
         float maxTime = 0.75f, currentTime = 0;
         pieceIsMoving = true;
         while(maxTime > currentTime){

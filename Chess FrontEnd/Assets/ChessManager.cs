@@ -105,12 +105,11 @@ public class ChessManager : MonoBehaviour
             }
             playerTurn = false;
         }else{ // if is not player turn.
-            // DoAIMove(true); // performs a random move.
-            DoAIMove(false); // gets a move from the server and executes it.
+            DoAIMove(); // gets a move from the server and executes it.
             // playerTurn = true;
         }
         yield return new WaitForSeconds(0.5f);
-        Debug.Log("Game loop ended in: " + Time.time.ToString());
+        // Debug.Log("Game loop ended in: " + Time.time.ToString());
         StartCoroutine(GameLoop());
     }
 
@@ -118,18 +117,18 @@ public class ChessManager : MonoBehaviour
         isGameLoopRunning = false;
     }
 
-    private void FixedUpdate() {
-        if(isGameLoopRunning){
-            timeGameLoopInactive = 0f;
-            return;
-        }
+    // private void FixedUpdate() {
+    //     if(isGameLoopRunning){
+    //         timeGameLoopInactive = 0f;
+    //         return;
+    //     }
 
-        timeGameLoopInactive += Time.fixedDeltaTime;
-        if(timeGameLoopInactive >= 3f){
-            timeGameLoopInactive = 0f;
-            Debug.Log("GameLoop is not running...");
-        }
-    }
+    //     timeGameLoopInactive += Time.fixedDeltaTime;
+    //     if(timeGameLoopInactive >= 3f){
+    //         timeGameLoopInactive = 0f;
+    //         Debug.Log("GameLoop is not running...");
+    //     }
+    // }
 
     private bool CheckGameDoneConditions(){
         if(stringmoves.Count == 0){
@@ -225,12 +224,10 @@ public class ChessManager : MonoBehaviour
         var Trb = Tablero.GetComponent<Rigidbody>();
 
         foreach (var piece in GetAllPiecesAsArray("w")){
-            Debug.Log("peto la pieza: " + piece);
             piece.GetComponent<Rigidbody>().AddExplosionForce(explosionforce, Tablero.transform.position + new Vector3(0,-5,0), explosionRadius, 0, ForceMode.Impulse);
         }
 
         foreach (var piece in GetAllPiecesAsArray("b")){
-            Debug.Log("peto la pieza: " + piece);
             piece.GetComponent<Rigidbody>().AddExplosionForce(explosionforce, Tablero.transform.position-new Vector3(0,-5,0), explosionRadius, 0, ForceMode.Impulse);
         }
 
@@ -244,15 +241,12 @@ public class ChessManager : MonoBehaviour
         Debug.Log("this quits the game on built application");
     }
 
-    async private void DoAIMove(bool random){
+    private async void DoAIMove(){
         Vector2 aux = new Vector2();
         // pick random from stringmoves and send it back
-        var chosenMove = "";
-
-        if(random)
-            chosenMove = stringmoves[Random.Range(0,stringmoves.Count)];
-        else
-            chosenMove = await GetMoveSuggestionFromServer();
+        var move_eval = await GetMoveSuggestionFromServer();
+        var chosenMove = move_eval[0];
+        var evaluation_value = move_eval[1];
 
         bool moveIsCastle = false;
 
@@ -336,7 +330,6 @@ public class ChessManager : MonoBehaviour
 
             //Update server and client visuals
             SendMoveToServer(aux, aux, chosenMove, true);
-
         }
 
         playerTurn = true;
@@ -345,6 +338,8 @@ public class ChessManager : MonoBehaviour
     private void MovePieceToCementery(Transform piece){
         Transform cementery;
         int deadPieces = 0;
+        Debug.Log($"is player black: {playingBlack}, or white {playingWhite}, is the players turn? {playerTurn}, piece to kill {piece}");
+
         if((playingBlack && playerTurn) || (playingWhite && !playerTurn)){
             deadPieces = deadPiecesWhite;
             deadPiecesWhite ++;
@@ -354,13 +349,32 @@ public class ChessManager : MonoBehaviour
             deadPiecesBlack ++;
             cementery = blackCementery;
         }
+        var p = piece.GetComponent<Piece>();
 
-        piece.transform.position = new Vector3(cementery.position.x + (int)deadPieces/5, piece.transform.position.y, cementery.position.z + deadPieces%5);
+        var deadpos = new Vector3(cementery.position.x + (int)deadPieces/5, piece.transform.position.y, cementery.position.z + deadPieces%5);
+        if(p.pieceIsMoving){
+            StartCoroutine(WaitPieceEndMove(p, deadpos));
+        }else{
+            MoveDeadPieceAct(piece, deadpos);
+        }
+
+    }
+
+    IEnumerator WaitPieceEndMove(Piece p, Vector3 deadpos){
+        while(p.pieceIsMoving){
+            yield return new WaitForSeconds(0.1f);
+        }
+        MoveDeadPieceAct(p.transform, deadpos);
+    }
+
+    private void MoveDeadPieceAct(Transform piece, Vector3 deadpos){
+        piece.transform.position = deadpos;
         try{
             piece.gameObject.GetComponent<Piece>().enabled = false;
             piece.gameObject.GetComponent<Outline>().enabled = false;
-        }catch{}
-
+        }catch (System.Exception e){
+            Debug.Log(e);
+        }
     }
 
     private Sprite GetMoveImagePromotions(string toPromote, string dir, string color){
@@ -750,18 +764,18 @@ public class ChessManager : MonoBehaviour
                     return false;
                 }
 
-                var pointHit = new Vector2(Mathf.RoundToInt(hit.point.x), Mathf.RoundToInt(hit.point.z));
-
+                var pointHit = new Vector2Int(Mathf.RoundToInt(hit.point.x), Mathf.RoundToInt(hit.point.z));
+                var selectedPos = new Vector2Int(Mathf.RoundToInt(selectedPiece.transform.position.x), Mathf.RoundToInt(selectedPiece.transform.position.z));
                 foreach (var v in validMoves){
                     if(v.Equals(pointHit)){
                         //TODO: en passant
 
                         //Move is valid, perform it and pass the turn to the next player.
                         //Update board
-                        _board[Mathf.RoundToInt(selectedPiece.transform.position.x), Mathf.RoundToInt(selectedPiece.transform.position.z)] = null;
-                        Transform piece_in_destination = _board[Mathf.RoundToInt(pointHit.x), Mathf.RoundToInt(pointHit.y)];
-                        _board[Mathf.RoundToInt(pointHit.x), Mathf.RoundToInt(pointHit.y)] = selectedPiece.transform;
-
+                        _board[selectedPos.x, selectedPos.y] = null;
+                        Transform piece_in_destination = _board[pointHit.x, pointHit.y];
+                        _board[pointHit.x, pointHit.y] = selectedPiece.transform;
+                        
                         if(piece_in_destination != null){ // this is our move so we send the piece to our cementery.
                             MovePieceToCementery(piece_in_destination);
                         }
@@ -905,7 +919,7 @@ public class ChessManager : MonoBehaviour
         currentTurnCheck = turn_info.SelectToken("in_check").Value<bool>();
     }
 
-    async private Task<string> GetMoveSuggestionFromServer(){
+    async private Task<string[]> GetMoveSuggestionFromServer(){
         var r = WebRequest.Create(url +"/games/"+gameKey+"/move_suggestion");
         r.Method = "GET";
         var response = r.GetResponse();
@@ -914,7 +928,8 @@ public class ChessManager : MonoBehaviour
         string data = reader.ReadToEnd();
         JObject root = JObject.Parse(data);
         var move = root.SelectToken("move").ToString();
-        return move;
+        var eval = root.SelectToken("eval").ToString();
+        return new string[] {move, eval};
     }
 
     private void SendMoveToServer(Vector2 move_origin, Vector2 move_desination, string moveString, bool usingString){
