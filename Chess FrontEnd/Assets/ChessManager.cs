@@ -36,7 +36,7 @@ public class ChessManager : MonoBehaviour
     public Transform whiteCementery;
     public Transform blackCementery;
 
-    public GameObject MCWhite, MCBlack, highlightSquarePrefab, highlightSquareCont, CanvasOptionPrefab, ButtonOptionPrefab, ResetCanvas;
+    public GameObject MCWhite, MCBlack, highlightSquarePrefab, highlightSquareCont, CanvasOptionPrefab, ButtonOptionPrefab, ResetPanel, ScoreBar;
 
     public Mesh queenMesh, bishopMesh, knightMesh, rookMesh, pawnMesh;
 
@@ -66,7 +66,7 @@ public class ChessManager : MonoBehaviour
 
 
     #endregion
-
+    
     public string playerColor(){
         return playingBlack ? "b":"w";
     }
@@ -113,9 +113,9 @@ public class ChessManager : MonoBehaviour
         StartCoroutine(GameLoop());
     }
 
-    private void Update() {
-        isGameLoopRunning = false;
-    }
+    // private void Update() {
+    //     isGameLoopRunning = false;
+    // }
 
     // private void FixedUpdate() {
     //     if(isGameLoopRunning){
@@ -147,11 +147,11 @@ public class ChessManager : MonoBehaviour
     }
 
     void PresentResetMenu(){
-        ResetCanvas.SetActive(true);
+        ResetPanel.SetActive(true);
     }
 
     public void ResetGame(){
-        ResetCanvas.SetActive(false);
+        ResetPanel.SetActive(false);
         InitializeBoard();
 
         for (int i = _board.GetLowerBound(0); i <= _board.GetUpperBound(0); i++){
@@ -246,7 +246,8 @@ public class ChessManager : MonoBehaviour
         // pick random from stringmoves and send it back
         var move_eval = await GetMoveSuggestionFromServer();
         var chosenMove = move_eval[0];
-        var evaluation_value = move_eval[1];
+
+        UpdateScoreBar(float.Parse(move_eval[1]));
 
         bool moveIsCastle = false;
 
@@ -930,6 +931,37 @@ public class ChessManager : MonoBehaviour
         var move = root.SelectToken("move").ToString();
         var eval = root.SelectToken("eval").ToString();
         return new string[] {move, eval};
+    }
+
+    /* 
+    Score goes from -10 to 10 its always done through the computers 
+    perspective so we reverse it and multiply it by the scorebars height.
+    */
+    private void UpdateScoreBar(float score){
+        var t = ScoreBar.GetComponent<RectTransform>();
+        var totWidth = t.sizeDelta.x;
+        var totHeight = t.sizeDelta.y;
+
+        var bar = t.GetChild(0).GetComponent<RectTransform>();
+        var value = 0f;
+        if(Mathf.Abs(score) > 10)
+            value = score < 0 ? -10:10;
+        else
+            value = score;
+        
+        value *= totHeight/20;
+        print($"evaluation was {score} and var value was {value}");
+
+        bar.localPosition = new Vector3(0,value/2,0);
+        bar.sizeDelta = new Vector2(totWidth, Mathf.Abs(value));
+        // bar.localScale = new Vector2(Mathf.Abs(value), totWidth);
+    }
+
+
+    IEnumerator ScoreBarAnim(){
+
+
+        yield return null;
     }
 
     private void SendMoveToServer(Vector2 move_origin, Vector2 move_desination, string moveString, bool usingString){
