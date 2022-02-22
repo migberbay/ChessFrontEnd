@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
 using UnityEngine.UI;
+using TMPro;
 using System.Net;
 using Newtonsoft.Json.Linq;
 using System.IO;
@@ -31,7 +32,8 @@ public class ChessManager : MonoBehaviour
 
     [Header("Logic")]
     [Space(1)]
-    public bool startPlayerAsWhite = true;
+    public bool startPlayerAsWhite = false;
+    public bool startPlayerAsBlack = false;
 
     public Transform whiteCementery;
     public Transform blackCementery;
@@ -39,7 +41,11 @@ public class ChessManager : MonoBehaviour
     public GameObject MCWhite, MCBlack, highlightSquarePrefab, highlightSquareCont, CanvasOptionPrefab, ButtonOptionPrefab, ResetPanel, ScoreBar;
 
     public Mesh queenMesh, bishopMesh, knightMesh, rookMesh, pawnMesh;
+    
+    public float miliseconds_to_think = 100;
+    public int depth_limit = 3;
 
+    public TMP_Text evaluation_score_text;
 
     Transform[,] _board =  new Transform[8,8];
     int deadPiecesWhite = 0, deadPiecesBlack = 0;
@@ -246,16 +252,23 @@ public class ChessManager : MonoBehaviour
         // pick random from stringmoves and send it back
         var move_eval = await GetMoveSuggestionFromServer();
         var chosenMove = move_eval[0];
+        evaluation_score_text.text = move_eval[1].Replace("+","p").Replace("-","+").Replace("p","-");
 
-        UpdateScoreBar(float.Parse(move_eval[1]));
+        if(move_eval[1].Contains("M")){
+            //TODO: checkmate in n moves.
+        }else{
+            Debug.Log($"evaluation from server was {move_eval[1]}");
+            UpdateScoreBar(float.Parse(move_eval[1].Replace(".",",").Replace("+","")));
+        }
+
 
         bool moveIsCastle = false;
 
         if(chosenMove == "O-O-O"){
             if(playerColor() == "w")// black
-                Castle(3,-3, ta8, selectedPiece, false);
+                Castle(3,-2, ta8, selectedPiece, false);
             else
-                Castle(3,-3, ta1, selectedPiece, false);
+                Castle(3,-2, ta1, selectedPiece, false);
             
             SendMoveToServer(new Vector2(), new Vector2(), "O-O-O", true);
             moveIsCastle = true;
@@ -864,7 +877,7 @@ public class ChessManager : MonoBehaviour
         // int side = UnityEngine.Random.Range(0,2);
         // side = 1;
 
-        int side = startPlayerAsWhite ? 0:1;
+        int side = startPlayerAsWhite ? 0 : startPlayerAsBlack ? 1 : Random.Range(0, 2);
 
 
         if(side==0){
@@ -921,7 +934,8 @@ public class ChessManager : MonoBehaviour
     }
 
     async private Task<string[]> GetMoveSuggestionFromServer(){
-        var r = WebRequest.Create(url +"/games/"+gameKey+"/move_suggestion");
+        //TODO: config the 
+        var r = WebRequest.Create($"{url}/games/{gameKey}/move_suggestion?move_ms={miliseconds_to_think}&depth={depth_limit}");
         r.Method = "GET";
         var response = r.GetResponse();
         var response_stream = response.GetResponseStream();
@@ -944,24 +958,33 @@ public class ChessManager : MonoBehaviour
 
         var bar = t.GetChild(0).GetComponent<RectTransform>();
         var value = 0f;
+
         if(Mathf.Abs(score) > 10)
             value = score < 0 ? -10:10;
         else
             value = score;
         
-        value *= totHeight/20;
+        var half_height = totHeight/2;
+
+        value = half_height + value * (-half_height/10);
+        StartCoroutine(ScoreBarAnim(bar, value, totWidth));
+
         print($"evaluation was {score} and var value was {value}");
 
-        bar.localPosition = new Vector3(0,value/2,0);
-        bar.sizeDelta = new Vector2(totWidth, Mathf.Abs(value));
+        // bar.localPosition = new Vector3(0,value/2,0);
         // bar.localScale = new Vector2(Mathf.Abs(value), totWidth);
     }
 
 
-    IEnumerator ScoreBarAnim(){
-
-
-        yield return null;
+    IEnumerator ScoreBarAnim(RectTransform bar,float endPos, float totWidth){
+        var t = 0f;
+        var init = bar.sizeDelta.y;
+        var delta = endPos - init;
+        while(t < 0.5f){
+            bar.sizeDelta = new Vector2(totWidth, init + (delta*(t/0.5f)));
+            t += Time.deltaTime;
+            yield return null;
+        }
     }
 
     private void SendMoveToServer(Vector2 move_origin, Vector2 move_desination, string moveString, bool usingString){

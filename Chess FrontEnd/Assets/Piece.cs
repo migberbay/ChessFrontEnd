@@ -4,7 +4,7 @@ using UnityEngine;
 
 public class Piece : MonoBehaviour
 {
-    public bool ownedByPlayer, isSelected = false, pieceIsMoving = false;
+    public bool ownedByPlayer, isSelected = false, pieceIsMoving = false, is_dead = false;
     public string pieceType;
     public Outline outline;
     

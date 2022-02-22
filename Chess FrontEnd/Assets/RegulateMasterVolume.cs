@@ -15,6 +15,7 @@ public class RegulateMasterVolume : MonoBehaviour
         active = Camera.allCameras[0];
         volumeScrollerCanvas = GetComponentInParent<Canvas>();
         volumeScrollerCanvas.worldCamera = active;
+        UpdateMasterDecibels(0.5f);
     }
 
     public void UpdateMasterDecibels(float value){
