@@ -11899,8 +11899,8 @@ MonoBehaviour:
   knightMesh: {fileID: -2720935500044092856, guid: cca9ba33af189434eac038be4a9dddfe, type: 3}
   rookMesh: {fileID: -6327319962397886626, guid: cca9ba33af189434eac038be4a9dddfe, type: 3}
   pawnMesh: {fileID: 3326428093478184164, guid: cca9ba33af189434eac038be4a9dddfe, type: 3}
-  miliseconds_to_think: 100
-  depth_limit: 3
+  miliseconds_to_think: 5000
+  depth_limit: 9999
   evaluation_score_text: {fileID: 88186284}
 --- !u!4 &1936420018
 Transform:
